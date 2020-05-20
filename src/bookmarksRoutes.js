@@ -1,6 +1,7 @@
 const express = require('express')
 const winston = require('winston')
 const { v4: uuidv4 } = require('uuid')
+const { NODE_ENV } = require('./config')
 
 const store = require('./store')
 
