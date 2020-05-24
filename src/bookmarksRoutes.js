@@ -1,33 +1,22 @@
 const express = require('express')
-const winston = require('winston')
+const logger = require('./logger')
 const { v4: uuidv4 } = require('uuid')
 const { NODE_ENV } = require('./config')
-
+const BookmarksService = require('./bookmarks-service')
 const store = require('./store')
 
 const bookmarksRouter = express.Router()
 const bodyParser = express.json()
 
-// set up winston
-const logger = winston.createLogger({
-    level: 'info',
-    format: winston.format.json(),
-    transports: [
-      new winston.transports.File({ filename: 'info.log' }),
-      new winston.transports.File({ filename: 'error.log', level: 'error' })
-    ]
-  });
-  
-  if (NODE_ENV !== 'production') {
-    logger.add(new winston.transports.Console({
-      format: winston.format.simple()
-    }));
-  }
-
 bookmarksRouter
   .route('/bookmarks')
-  .get((req, res) => {
-    res.json(store.bookmarks)
+  .get((req, res, next) => {
+    const knexInstance = req.app.get('db')
+    BookmarksService.getAllBookmarks(knexInstance)
+      .then(bookmarks => {
+        res.json(bookmarks)
+      })
+      .catch(next)
   })
   .post(bodyParser, (req, res) => {
     for (const field of ['title', 'url', 'rating']) {
@@ -56,19 +45,19 @@ bookmarksRouter
 
 bookmarksRouter
   .route('/bookmarks/:id')
-  .get((req, res) => {
-    const { id } = req.params
-
-    const bookmark = store.bookmarks.find(b => b.id == id)
-
-    if (!bookmark) {
-      logger.error(`Bookmark with id ${id} not found.`)
-      return res
-        .status(404)
-        .send('Bookmark Not Found')
-    }
-
-    res.json(bookmark)
+  .get((req, res, next) => {
+    const knexInstance = req.app.get('db')
+    BookmarksService.getById(knexInstance, req.params.id)
+      .then(bookmark => {
+        if (!bookmark) {
+          logger.error(`Bookmark with id ${req.params.id} not found.`)
+          return res.status(404).json({
+            error: { message: `Bookmark Not Found` }
+          })
+        }
+        res.json(bookmark)
+      })
+      .catch(next)
   })
   .delete((req, res) => {
     const { id } = req.params
